@@ -1,0 +1,17 @@
+{
+  "name": "localization",
+  "type": "javascript",
+  "account_id": "8033059ae1977f920383301df00eaffd",
+  "workers_dev": false,
+  "route": "localization.heimlicher.com/*",
+  "zone_id": "d856660843276312ff9a64a28ec649a4",
+  "compatibility_date": "2024-02-13",
+  "deployments": {
+    "github": {
+      "repository": "simonheimlicher/heimlicher.com-cf-worker",
+      "branch": "main",
+      "directory": "/",
+      "project_path": "worker.js"
+    }
+  }
+}
