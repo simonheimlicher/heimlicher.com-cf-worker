@@ -1,4 +1,4 @@
-const API_HOST = "eu.posthog.com"; // Change to "eu.posthog.com" for the EU region
+const API_HOST = "eu.posthog.com"; // API host set to "eu.posthog.com" for the EU region
 
 const validOrigins = [
     "https://stage.heimlicher.com",
@@ -10,20 +10,20 @@ async function handleRequest(event) {
     const url = new URL(event.request.url);
     const pathname = url.pathname;
     const search = url.search;
-    const pathWithParams = pathname + search;
+    const pathWithSearch = pathname + search;
     
     if (pathname.startsWith("/static/")) {
-        return retrieveStatic(event, pathWithParams);
+        return retrieveStatic(event, pathWithSearch);
     } else {
-        return forwardRequest(event, pathWithParams);
+        return forwardRequest(event, pathWithSearch);
     }
 }
 
-async function retrieveStatic(event, pathname) {
+async function retrieveStatic(event, pathWithSearch) {
     let response = await caches.default.match(event.request);
     
     if (!response) {
-        response = await fetch(`https://${API_HOST}${pathname}`);
+        response = await fetch(`https://${API_HOST}${pathWithSearch}`);
         // Clone the response so we can add custom headers to it
         let newResponse = new Response(response.body, response);
         // Set Cache-Control header for static assets
@@ -39,20 +39,15 @@ async function retrieveStatic(event, pathname) {
 }
 
 async function forwardRequest(event, pathWithSearch) {
-    const request = new Request(event.request);
-    // Do not delete cookies, pass them along
-    let response = await fetch(`https://${API_HOST}${pathWithSearch}`, request);
-    
-    // Clone the response and add CORS headers
-    let newResponse = new Response(response.body, response);
-    addCORSHeaders(event, newResponse);
-    
-    return newResponse;
+    let response = await fetch(`https://${API_HOST}${pathWithSearch}`, event.request);
+    addCORSHeaders(event, response);
+    return response;
 }
 
-// Function to add CORS headers with dynamic origin check
+// Add CORS headers with dynamic origin check
 function addCORSHeaders(event, response) {
     const origin = event.request.headers.get('Origin');
+    response.headers.set('X-Access-Control-Check-Origin', `Check if ${origin} is in ${validOrigins}`);
     
     // Only allow CORS if the origin is valid
     if (origin) {
@@ -63,11 +58,11 @@ function addCORSHeaders(event, response) {
             response.headers.set('Access-Control-Allow-Credentials', 'true');
         } else {
             // In case of invalid origin, we provide an error header
-            response.headers.set('X-Access-Control-Allow-Origin', `Origin not allowed: '${origin}'`);  // Show invalid origin
+            response.headers.set('X-Access-Control-Check-Origin', `Origin not allowed: ${origin} not in ${validOrigins}`);  // Show invalid origin
         }    
     } else {
         // In case of unset origin, we provide an error header
-        response.headers.set('X-Access-Control-Allow-Origin', `Origin not set: '${origin}'`);  // Show invalid origin
+        response.headers.set('X-Access-Control-Check-Origin', `Origin not set: '${origin}'`);  // Show invalid origin
     }    
 }
 
