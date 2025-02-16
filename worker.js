@@ -62,7 +62,7 @@ function addCORSHeaders(event, response) {
         response.headers.set('Access-Control-Allow-Credentials', 'true');
     } else {
         // In case of invalid origin, we can block the request by not adding the CORS headers
-        response.headers.set('Access-Control-Allow-Origin', 'null');  // Block invalid origin
+        response.headers.set('Access-Control-Allow-Origin', origin);  // Show invalid origin
     }
 }
 
