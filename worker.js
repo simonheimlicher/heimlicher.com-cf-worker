@@ -40,14 +40,18 @@ async function retrieveStatic(event, pathWithSearch) {
 
 async function forwardRequest(event, pathWithSearch) {
     let response = await fetch(`https://${API_HOST}${pathWithSearch}`, event.request);
-    addCORSHeaders(event, response);
-    return response;
+    // Clone the response so we can modify headers
+    let newResponse = new Response(response.body, response);
+    
+    // Now we can safely add CORS headers
+    addCORSHeaders(event, newResponse);
+    return newResponse;
 }
 
 // Add CORS headers with dynamic origin check
 function addCORSHeaders(event, response) {
     const origin = event.request.headers.get('Origin');
-    
+
     // Check if the origin is valid, and set CORS headers accordingly
     if (origin && validOrigins.includes(origin)) {
         response.headers.set('Access-Control-Allow-Origin', origin); // Allow specific origin
