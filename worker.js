@@ -41,32 +41,34 @@ async function retrieveStatic(event, pathWithSearch) {
 async function forwardRequest(event, pathWithSearch) {
     let response = await fetch(`https://${API_HOST}${pathWithSearch}`, event.request);
     // Clone the response so we can modify headers
-    let newResponse = new Response(response.body, response);
+    let tmpResponse = new Response(response.body, response);
     
     // Now we can safely add CORS headers
-    addCORSHeaders(event, newResponse);
-    return newResponse;
+    finalResponse = addCORSHeaders(event, tmpResponse);
+    return finalResponse;
 }
 
 // Add CORS headers with dynamic origin check
 function addCORSHeaders(event, response) {
     const origin = event.request.headers.get('Origin');
 
+    // Clone the response so we can modify headers
+    let tmpResponse = new Response(response.body, response);
+
+    // Return origin as header for debugging
+    tmpResponse.headers.set('X-Origin', `Checking if origin '${origin}' is in ${validOrigins.join(', ')}`);
+
     // Check if the origin is valid, and set CORS headers accordingly
     if (origin && validOrigins.includes(origin)) {
-        response.headers.set('Access-Control-Allow-Origin', origin); // Allow specific origin
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-        response.headers.set('Access-Control-Allow-Credentials', 'true');
-    } else {
-        // If origin is invalid, you could log it for debugging
-        response.headers.set('X-Access-Control-Check-Origin', `Invalid or missing origin: '${origin}'`);
-        // Optionally, you could return a 403 or another status code here
+        tmpResponse.headers.set('Access-Control-Allow-Origin', origin); // Allow specific origin
+        tmpResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        tmpResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+        tmpResponse.headers.set('Access-Control-Allow-Credentials', 'true');
     }
  
     // Convert headers to an object for easier logging
     const headersObj = {};
-    response.headers.forEach((value, key) => {
+    tmpResponse.headers.forEach((value, key) => {
         headersObj[key] = value;
     });
 
@@ -76,6 +78,8 @@ function addCORSHeaders(event, response) {
         validOrigins: validOrigins,
         responseHeaders: headersObj
     });
+
+    return tmpResponse;
 }
 
 addEventListener("fetch", (event) => {
