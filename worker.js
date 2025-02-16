@@ -54,7 +54,8 @@ async function retrieveStatic(event, pathWithSearch) {
         // Clone the response so we can add custom headers to it
         let newResponse = new Response(response.body, response);
         // Set Cache-Control header for static assets
-        newResponse.headers.set('Cache-Control', 'public, max-age=2592000'); // 30 days
+        // Use `private` to prevent caching on shared caches (e.g. CDNs)
+        newResponse.headers.set('Cache-Control', 'private, max-age=2592000'); // 30 days
 
         // Add CORS headers
         addCORSHeaders(event, newResponse);
