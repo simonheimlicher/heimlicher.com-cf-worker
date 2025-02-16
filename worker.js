@@ -12,12 +12,30 @@ async function handleRequest(event) {
     const search = url.search;
     const pathWithSearch = pathname + search;
     
+    let response = null;
     if (pathname.startsWith("/static/")) {
-        return retrieveStatic(event, pathWithSearch);
+        response = await retrieveStatic(event, pathWithSearch);  // Await the promise
     } else {
-        return forwardRequest(event, pathWithSearch);
+        response = await forwardRequest(event, pathWithSearch);  // Await the promise
     }
+
+    // Convert headers to an object for easier logging
+    const headersObj = {};
+    response.headers.forEach((value, key) => {
+        headersObj[key] = value;
+    });
+
+    // Log origin, validOrigins, and the formatted response headers
+    console.log({
+        author: "handleRequest",
+        origin: event.request.headers.get('Origin'),  // Log the actual request origin
+        validOrigins: validOrigins,
+        responseHeaders: headersObj
+    });
+
+    return response;
 }
+
 
 async function retrieveStatic(event, pathWithSearch) {
     let response = await caches.default.match(event.request);
@@ -74,6 +92,7 @@ function addCORSHeaders(event, response) {
 
     // Log origin, validOrigins, and the formatted response headers
     console.log({
+        author: "addCORSHeaders",
         origin: origin,
         validOrigins: validOrigins,
         responseHeaders: headersObj
