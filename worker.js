@@ -47,23 +47,18 @@ async function forwardRequest(event, pathWithSearch) {
 // Add CORS headers with dynamic origin check
 function addCORSHeaders(event, response) {
     const origin = event.request.headers.get('Origin');
-    response.headers.set('X-Access-Control-Check-Origin', `Check if ${origin} is in ${validOrigins}`);
     
-    // Only allow CORS if the origin is valid
-    if (origin) {
-        if (validOrigins.includes(origin)) {
-            response.headers.set('Access-Control-Allow-Origin', origin);  // Allow specific origin
-            response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-            response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-            response.headers.set('Access-Control-Allow-Credentials', 'true');
-        } else {
-            // In case of invalid origin, we provide an error header
-            response.headers.set('X-Access-Control-Check-Origin', `Origin not allowed: ${origin} not in ${validOrigins}`);  // Show invalid origin
-        }    
+    // Check if the origin is valid, and set CORS headers accordingly
+    if (origin && validOrigins.includes(origin)) {
+        response.headers.set('Access-Control-Allow-Origin', origin); // Allow specific origin
+        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+        response.headers.set('Access-Control-Allow-Credentials', 'true');
     } else {
-        // In case of unset origin, we provide an error header
-        response.headers.set('X-Access-Control-Check-Origin', `Origin not set: '${origin}'`);  // Show invalid origin
-    }    
+        // If origin is invalid, you could log it for debugging
+        response.headers.set('X-Access-Control-Check-Origin', `Invalid or missing origin: '${origin}'`);
+        // Optionally, you could return a 403 or another status code here
+    }
 }
 
 addEventListener("fetch", (event) => {
