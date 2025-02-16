@@ -59,6 +59,7 @@ function addCORSHeaders(event, response) {
         response.headers.set('X-Access-Control-Check-Origin', `Invalid or missing origin: '${origin}'`);
         // Optionally, you could return a 403 or another status code here
     }
+    console.log({ origin: origin, validOrigins: validOrigins, response: response });
 }
 
 addEventListener("fetch", (event) => {
