@@ -55,15 +55,20 @@ function addCORSHeaders(event, response) {
     const origin = event.request.headers.get('Origin');
     
     // Only allow CORS if the origin is valid
-    if (validOrigins.includes(origin)) {
-        response.headers.set('Access-Control-Allow-Origin', origin);  // Allow specific origin
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-        response.headers.set('Access-Control-Allow-Credentials', 'true');
+    if (origin) {
+        if (validOrigins.includes(origin)) {
+            response.headers.set('Access-Control-Allow-Origin', origin);  // Allow specific origin
+            response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+            response.headers.set('Access-Control-Allow-Credentials', 'true');
+        } else {
+            // In case of invalid origin, we provide an error header
+            response.headers.set('X-Access-Control-Allow-Origin', `Origin not allowed: '${origin}'`);  // Show invalid origin
+        }    
     } else {
-        // In case of invalid origin, we can block the request by not adding the CORS headers
-        response.headers.set('Access-Control-Allow-Origin', origin);  // Show invalid origin
-    }
+        // In case of unset origin, we provide an error header
+        response.headers.set('X-Access-Control-Allow-Origin', `Origin not set: '${origin}'`);  // Show invalid origin
+    }    
 }
 
 addEventListener("fetch", (event) => {
