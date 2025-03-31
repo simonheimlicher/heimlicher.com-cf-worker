@@ -1,4 +1,8 @@
-const API_HOST = "eu.posthog.com"; // API host set to "eu.posthog.com" for the EU region
+// === Global Constants ===
+const DEBUG = true;
+
+// Set API host to "eu.posthog.com" for the EU region
+const API_HOST = "eu.posthog.com";
 
 const validOrigins = [
     "https://stage.heimlicher.com",
@@ -6,44 +10,43 @@ const validOrigins = [
     "https://heimlicher.com"
 ];
 
+// Cache header constants
+const CACHE_HEADER_CONTROL = "public, max-age=2592000, stale-while-revalidate";
+const CACHE_HEADER_VARY = "Origin";
+
+// CORS header constants
+const CORS_HEADER_ALLOW_METHODS = "GET, POST, OPTIONS";
+const CORS_HEADER_ALLOW_HEADERS = "Content-Type";
+const CORS_HEADER_ALLOW_CREDENTIALS = "true";
+const CORS_HEADER_VARY = "Origin";
+
+// === Main Request Handler ===
 async function handleRequest(event) {
-    const url = new URL(event.request.url);
-    const pathname = url.pathname;
-    const search = url.search;
-    const pathWithSearch = pathname + search;
-    
-    let response = null;
-    if (pathname.startsWith("/static/")) {
-        response = await retrieveStatic(event, pathWithSearch);  // Await the promise
-    } else {
-        response = await forwardRequest(event, pathWithSearch);  // Await the promise
+    const request = event.request;
+
+    // Handle CORS preflight request
+    if (request.method === "OPTIONS") {
+        return handlePreflight(request);
     }
 
-    // Convert headers to an object for easier logging
-    const headersObj = {};
-    response.headers.forEach((value, key) => {
-        headersObj[key] = value;
-    });
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    const pathWithSearch = pathname + url.search;
 
-    // Log origin, validOrigins, and the formatted response headers
-    console.log({
-        author: "handleRequest",
-        origin: event.request.headers.get('Origin'),  // Log the actual request origin
-        validOrigins: validOrigins,
-        responseHeaders: headersObj
-    });
+    const response = pathname.startsWith("/static/")
+        ? await retrieveStatic(event, pathWithSearch)
+        : await forwardRequest(event, pathWithSearch);
 
+    if (DEBUG) logResponse("handleRequest", request, response);
     return response;
 }
 
+// === Static Resource Caching ===
 async function retrieveStatic(event, pathWithSearch) {
-    const origin = event.request.headers.get('Origin');
-    // Use a cache key that includes the origin to differentiate between different origins
+    const origin = event.request.headers.get("Origin");
+
     const cacheKey = new Request(event.request.url, {
-        headers: {
-            ...event.request.headers,
-            'Origin': origin // Include Origin header in the cache key
-        }
+        headers: { ...event.request.headers, "Origin": origin }
     });
 
     let response = await caches.default.match(cacheKey);
@@ -54,11 +57,10 @@ async function retrieveStatic(event, pathWithSearch) {
         // Clone the response so we can add custom headers to it
         let newResponse = new Response(response.body, response);
         // Set Cache-Control header for static assets
-        // Use `private` to prevent caching on shared caches (e.g. CDNs)
-        newResponse.headers.set('Cache-Control', 'private, max-age=2592000'); // 30 days
 
-        // Add CORS headers
-        addCORSHeaders(event, newResponse);
+        // ✅ Allow CDN caching (Cloudflare) with per-origin separation
+        setCacheHeaders(newResponse);
+        setCORSHeaders(origin, newResponse);
 
         // Store in the cache with the new cache key (which includes the origin)
         event.waitUntil(caches.default.put(cacheKey, newResponse.clone()));
@@ -67,50 +69,112 @@ async function retrieveStatic(event, pathWithSearch) {
 
     // If found in cache, apply CORS headers (needed for correct CORS behavior)
     let cachedResponse = response.clone();
-    addCORSHeaders(event, cachedResponse);
+    setCORSHeaders(origin, cachedResponse);
     return cachedResponse;
 }
 
+// === Proxy Other Requests ===
 async function forwardRequest(event, pathWithSearch) {
+    const origin = event.request.headers.get("Origin");
+
     let response = await fetch(`https://${API_HOST}${pathWithSearch}`, event.request);
-    // Clone the response so we can modify headers
     let newResponse = new Response(response.body, response);
-    
     // Add CORS headers
-    addCORSHeaders(event, newResponse);
+
+    setCORSHeaders(origin, newResponse);
     return newResponse;
 }
 
-// Add CORS headers with dynamic origin check
-function addCORSHeaders(event, response) {
-    const origin = event.request.headers.get('Origin');
+// === Handle Preflight (OPTIONS) ===
+function handlePreflight(request) {
+    const origin = request.headers.get("Origin");
 
-    // Check if the origin is valid, and set CORS headers accordingly
     if (origin && validOrigins.includes(origin)) {
-        response.headers.set('Access-Control-Allow-Origin', origin); // Allow specific origin
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-        response.headers.set('Access-Control-Allow-Credentials', 'true');
-    } else {
-        // If origin is invalid, log it for debugging
-        response.headers.set('X-Origin', `Invalid or missing origin: '${origin}'`);
+        const headers = getCORSHeaders(origin);
+        return new Response(null, { status: 204, headers });
     }
 
-    // Convert headers to an object for easier logging
-    const headersObj = {};
-    response.headers.forEach((value, key) => {
-        headersObj[key] = value;
-    });
-
-    // Log origin, validOrigins, and the formatted response headers
-    console.log({
-        author: "addCORSHeaders",
-        origin: origin,
-        validOrigins: validOrigins,
-        responseHeaders: headersObj
+    return new Response(null, {
+        status: 403,
+        headers: { "X-Origin": `Invalid or missing origin: "${origin}"` }
     });
 }
 
+// === Set CORS Headers ===
+function setCORSHeaders(origin, response) {
+    if (origin && validOrigins.includes(origin)) {
+        const corsHeaders = getCORSHeaders(origin);
+        for (const [key, value] of Object.entries(corsHeaders)) {
+            if (key === "Vary") {
+                appendVaryHeader(response, value);
+            } else {
+                response.headers.set(key, value);
+            }
+        }
+    } else {
+        response.headers.set("X-Origin", `Invalid or missing origin: "${origin}"`);
+    }
+
+    if (DEBUG) logHeaders("setCORSHeaders", origin, response.headers);
+}
+
+// === Get CORS Headers Object ===
+function getCORSHeaders(origin) {
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": CORS_HEADER_ALLOW_METHODS,
+        "Access-Control-Allow-Headers": CORS_HEADER_ALLOW_HEADERS,
+        "Access-Control-Allow-Credentials": CORS_HEADER_ALLOW_CREDENTIALS,
+        "Vary": CORS_HEADER_VARY
+    };
+}
+
+// === Set Cache Headers ===
+function setCacheHeaders(response) {
+    response.headers.set("Cache-Control", CACHE_HEADER_CONTROL);
+    appendVaryHeader(response, CACHE_HEADER_VARY);
+}
+
+// === Append Vary Header Without Overwriting ===
+function appendVaryHeader(response, value) {
+    const existing = response.headers.get("Vary");
+    if (!existing) {
+        response.headers.set("Vary", value);
+    } else {
+        const values = existing.split(",").map(v => v.trim());
+        if (!values.includes(value)) {
+            response.headers.set("Vary", `${existing}, ${value}`);
+        }
+    }
+}
+
+// === Logging Helpers ===
+function logResponse(source, request, response) {
+    const headers = {};
+    response.headers.forEach((value, key) => (headers[key] = value));
+
+    console.log({
+        source,
+        method: request.method,
+        origin: request.headers.get("Origin"),
+        url: request.url,
+        responseHeaders: headers
+    });
+}
+
+function logHeaders(source, origin, headers) {
+    const headersObj = {};
+    headers.forEach((value, key) => (headersObj[key] = value));
+
+    console.log({
+        source,
+        origin,
+        validOrigins,
+        headers: headersObj
+    });
+}
+
+// === Event Listener ===
 addEventListener("fetch", (event) => {
     event.passThroughOnException();
     event.respondWith(handleRequest(event));
