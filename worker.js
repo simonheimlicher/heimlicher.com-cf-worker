@@ -33,7 +33,8 @@ async function handleRequest(event) {
     const pathname = url.pathname;
     const pathWithSearch = pathname + url.search;
 
-    const response = pathname.startsWith("/static/")
+    const response = (pathname.startsWith("/static/") ||
+        (pathname.startsWith("/array/") && pathname.endsWith("config.js")))
         ? await retrieveStatic(event, pathWithSearch)
         : await forwardRequest(event, pathWithSearch);
 
@@ -79,8 +80,8 @@ async function forwardRequest(event, pathWithSearch) {
 
     let response = await fetch(`https://${API_HOST}${pathWithSearch}`, event.request);
     let newResponse = new Response(response.body, response);
+  
     // Add CORS headers
-
     setCORSHeaders(origin, newResponse);
     return newResponse;
 }
